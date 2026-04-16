@@ -128,6 +128,10 @@ docker compose up -d
 - frontend: `http://localhost:3000`
 - backend: `http://localhost:8080`
 
+默认数据目录：
+
+- `./data/postgres`
+
 ## 本地 compose 结构
 
 `docker-compose.yml` 会启动：
@@ -135,6 +139,10 @@ docker compose up -d
 - `postgres`
 - `backend`
 - `frontend`
+
+其中 PostgreSQL 数据使用本地目录持久化：
+
+- `./data/postgres` -> `/var/lib/postgresql/data`
 
 这个 compose **不再内置 gateway**。
 

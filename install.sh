@@ -49,6 +49,7 @@ fi
 
 mkdir -p "$INSTALL_DIR"
 cd "$INSTALL_DIR"
+mkdir -p data/postgres
 
 for f in docker-compose.yml .env .env.example; do
   if [ "$FORCE" != "1" ] && [ -e "$f" ]; then
