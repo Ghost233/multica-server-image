@@ -2,7 +2,7 @@
 set -eu
 
 RAW_BASE_URL="${RAW_BASE_URL:-https://raw.githubusercontent.com/Ghost233/multica-server-image/main}"
-INSTALL_DIR="${INSTALL_DIR:-./multica}"
+INSTALL_DIR="${INSTALL_DIR:-.}"
 FORCE="${FORCE:-0}"
 
 require_cmd() {

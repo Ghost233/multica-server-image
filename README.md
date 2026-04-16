@@ -78,7 +78,7 @@ curl -fsSL https://raw.githubusercontent.com/Ghost233/multica-server-image/main/
 4. 自动生成随机 `JWT_SECRET`
 5. 执行 `docker compose up -d`
 
-默认会把文件安装到当前目录下的 `./multica`。
+默认会把文件直接安装到当前执行目录。
 
 你也可以在执行前通过环境变量覆盖默认行为，例如：
 
