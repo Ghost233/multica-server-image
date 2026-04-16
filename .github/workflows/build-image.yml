@@ -7,8 +7,17 @@ on:
         description: Upstream multica ref to package (tag, branch, or commit)
         required: true
         default: v0.2.0
+      channel:
+        description: Packaging channel (auto routes version tags to release and branches/SHAs to dev)
+        required: true
+        type: choice
+        default: auto
+        options:
+          - auto
+          - release
+          - dev
       push_latest:
-        description: Also publish the latest tag
+        description: Also publish the latest tag for release builds
         required: true
         type: boolean
         default: false
@@ -46,11 +55,34 @@ jobs:
           safe_ref="$(printf '%s' "$raw_ref" | tr '/:@' '-')"
           commit="$(git -C upstream rev-parse HEAD)"
           short_sha="$(git -C upstream rev-parse --short HEAD)"
-          tags="${IMAGE_NAME}:${safe_ref}\n${IMAGE_NAME}:sha-${short_sha}"
-          if [ '${{ inputs.push_latest }}' = 'true' ]; then
-            tags="${tags}\n${IMAGE_NAME}:latest"
+
+          channel='${{ inputs.channel }}'
+          if [ "$channel" = 'auto' ]; then
+            if printf '%s' "$raw_ref" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+'; then
+              channel='release'
+            else
+              channel='dev'
+            fi
           fi
+
+          case "$channel" in
+            release)
+              tags="${IMAGE_NAME}:${safe_ref}\n${IMAGE_NAME}:sha-${short_sha}"
+              if [ '${{ inputs.push_latest }}' = 'true' ]; then
+                tags="${tags}\n${IMAGE_NAME}:latest"
+              fi
+              ;;
+            dev)
+              tags="${IMAGE_NAME}:dev\n${IMAGE_NAME}:dev-${short_sha}"
+              ;;
+            *)
+              echo "Unsupported channel: $channel" >&2
+              exit 1
+              ;;
+          esac
+
           {
+            echo "channel=${channel}"
             echo "commit=${commit}"
             echo "version=${raw_ref}"
             echo 'tags<<EOF'
@@ -80,3 +112,4 @@ jobs:
             org.opencontainers.image.revision=${{ steps.meta.outputs.commit }}
             org.opencontainers.image.version=${{ steps.meta.outputs.version }}
             org.opencontainers.image.description=Packaging image for Multica server
+            org.opencontainers.image.vendor=Ghost233

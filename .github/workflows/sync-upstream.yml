@@ -1,0 +1,166 @@
+name: Sync Upstream Images
+
+on:
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_NAME: ghcr.io/ghost233/multica-server-image
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout packaging repo
+        uses: actions/checkout@v4
+
+      - name: Determine latest upstream release
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$(gh api repos/multica-ai/multica/releases/latest --jq '.tag_name')"
+          safe_tag="$(printf '%s' "$tag" | tr '/:@' '-')"
+          {
+            echo "tag=${tag}"
+            echo "safe_tag=${safe_tag}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check whether release image already exists
+        id: release_check
+        shell: bash
+        run: |
+          set -euo pipefail
+          if docker manifest inspect "${IMAGE_NAME}:${{ steps.release.outputs.safe_tag }}" >/dev/null 2>&1; then
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "Release image already exists for ${{ steps.release.outputs.tag }}"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "Release image missing for ${{ steps.release.outputs.tag }}"
+          fi
+
+      - name: Checkout upstream source
+        if: steps.release_check.outputs.build == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: multica-ai/multica
+          ref: ${{ steps.release.outputs.tag }}
+          path: upstream
+          fetch-depth: 1
+
+      - name: Derive release metadata
+        if: steps.release_check.outputs.build == 'true'
+        id: release_meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          commit="$(git -C upstream rev-parse HEAD)"
+          short_sha="$(git -C upstream rev-parse --short HEAD)"
+          tags="${IMAGE_NAME}:${{ steps.release.outputs.safe_tag }}\n${IMAGE_NAME}:sha-${short_sha}\n${IMAGE_NAME}:latest"
+          {
+            echo "commit=${commit}"
+            echo "version=${{ steps.release.outputs.tag }}"
+            echo 'tags<<EOF'
+            printf '%b\n' "$tags"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build and publish release image
+        if: steps.release_check.outputs.build == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.release_meta.outputs.tags }}
+          build-args: |
+            VERSION=${{ steps.release_meta.outputs.version }}
+            COMMIT=${{ steps.release_meta.outputs.commit }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ steps.release_meta.outputs.commit }}
+            org.opencontainers.image.version=${{ steps.release_meta.outputs.version }}
+            org.opencontainers.image.description=Packaging image for Multica server
+            org.opencontainers.image.vendor=Ghost233
+
+  dev:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout packaging repo
+        uses: actions/checkout@v4
+
+      - name: Checkout upstream main
+        uses: actions/checkout@v4
+        with:
+          repository: multica-ai/multica
+          ref: main
+          path: upstream
+          fetch-depth: 1
+
+      - name: Derive dev metadata
+        id: dev_meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          commit="$(git -C upstream rev-parse HEAD)"
+          short_sha="$(git -C upstream rev-parse --short HEAD)"
+          {
+            echo "commit=${commit}"
+            echo "short_sha=${short_sha}"
+            echo "version=main"
+            echo 'tags<<EOF'
+            printf '%b\n' "${IMAGE_NAME}:dev\n${IMAGE_NAME}:dev-${short_sha}"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check whether dev image already exists
+        id: dev_check
+        shell: bash
+        run: |
+          set -euo pipefail
+          if docker manifest inspect "${IMAGE_NAME}:dev-${{ steps.dev_meta.outputs.short_sha }}" >/dev/null 2>&1; then
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "Dev image already exists for main@${{ steps.dev_meta.outputs.short_sha }}"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "Dev image missing for main@${{ steps.dev_meta.outputs.short_sha }}"
+          fi
+
+      - name: Build and publish dev image
+        if: steps.dev_check.outputs.build == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.dev_meta.outputs.tags }}
+          build-args: |
+            VERSION=${{ steps.dev_meta.outputs.version }}
+            COMMIT=${{ steps.dev_meta.outputs.commit }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ steps.dev_meta.outputs.commit }}
+            org.opencontainers.image.version=dev
+            org.opencontainers.image.description=Dev packaging image for Multica server main branch
+            org.opencontainers.image.vendor=Ghost233
