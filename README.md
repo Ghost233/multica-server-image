@@ -52,7 +52,7 @@
 - 默认使用同源 API
 - 默认按当前站点域名推导 WebSocket 地址 `/ws`
 
-这意味着前端镜像更适合和反向代理一起部署，由反向代理把：
+这意味着前端镜像更适合和外部反向代理一起部署，由外部 `nginx` 或其他代理把：
 
 - `/api/*`
 - `/auth/*`
@@ -65,7 +65,6 @@
 仓库根目录提供：
 
 - `docker-compose.yml`
-- `Caddyfile`
 - `.env.example`
 
 使用步骤：
@@ -87,9 +86,10 @@ cp .env.example .env
 docker compose up -d
 ```
 
-默认访问地址：
+默认端口：
 
-- `http://localhost:3000`
+- frontend: `http://localhost:3000`
+- backend: `http://localhost:8080`
 
 ## 本地 compose 结构
 
@@ -98,10 +98,21 @@ docker compose up -d
 - `postgres`
 - `backend`
 - `frontend`
-- `gateway`（Caddy）
 
-其中：
+这个 compose **不再内置 gateway**。
 
-- 浏览器只访问 `gateway`
-- `gateway` 把 `/api`、`/auth`、`/ws` 转发到后端
-- 其余页面请求转发到前端
+也就是说：
+
+- 如果你本地直接访问前端，可以访问 `FRONTEND_PORT`
+- 如果你在线上已经有外部 `nginx`，就由外部 `nginx` 自己把：
+  - 页面请求转发到 frontend
+  - `/api`、`/auth`、`/ws` 转发到 backend
+
+## 外部反向代理建议
+
+如果你使用外部 `nginx`，推荐的转发规则是：
+
+- `/api/` -> backend:8080
+- `/auth/` -> backend:8080
+- `/ws` -> backend:8080
+- 其他路径 -> frontend:3000
