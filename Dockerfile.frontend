@@ -11,10 +11,12 @@ COPY upstream/package.json upstream/pnpm-lock.yaml upstream/pnpm-workspace.yaml 
 COPY upstream/apps/web ./apps/web
 COPY upstream/packages ./packages
 
+ARG REMOTE_API_URL=http://backend:8080
 ARG NEXT_PUBLIC_API_URL=
 ARG NEXT_PUBLIC_WS_URL=
 ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID=
 
+ENV REMOTE_API_URL=${REMOTE_API_URL}
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL}
 ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=${NEXT_PUBLIC_GOOGLE_CLIENT_ID}

@@ -8,6 +8,6 @@ if [ ! -f .env ]; then
   exit 1
 fi
 
-mkdir -p data/postgres
+mkdir -p data/postgres data/uploads
 
 docker compose --env-file .env up -d

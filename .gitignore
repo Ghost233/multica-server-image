@@ -3,3 +3,5 @@
 
 data/postgres/
 !data/.gitkeep
+data/uploads/*
+!data/uploads/.gitkeep

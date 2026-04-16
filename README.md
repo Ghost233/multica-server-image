@@ -108,6 +108,7 @@ INSTALL_DIR=/opt/multica MULTICA_TAG=v0.2.0 FRONTEND_PORT=80 BACKEND_PORT=8080 .
 - `JWT_SECRET`
 - `BACKEND_PORT`
 - `FRONTEND_PORT`
+- `REMOTE_API_URL`
 
 仓库根目录提供：
 
@@ -146,9 +147,12 @@ cp .env.example .env
 - frontend: `http://localhost:3000`
 - backend: `http://localhost:8080`
 
+前端容器默认通过 `REMOTE_API_URL=http://backend:8080` 把 `/api`、`/auth`、`/ws` 代理到 backend 容器。
+
 默认数据目录：
 
 - `./data/postgres`
+- `./data/uploads`
 
 ## 本地 compose 结构
 
@@ -158,9 +162,10 @@ cp .env.example .env
 - `backend`
 - `frontend`
 
-其中 PostgreSQL 数据使用本地目录持久化：
+其中本地数据目录会分别持久化：
 
-- `./data/postgres` -> `/var/lib/postgresql/data`
+- `./data/postgres` -> PostgreSQL 数据目录 `/var/lib/postgresql/data`
+- `./data/uploads` -> backend 本地上传目录 `/app/data/uploads`
 
 这个 compose **不再内置 gateway**。
 
@@ -172,6 +177,8 @@ cp .env.example .env
   - `/api`、`/auth`、`/ws` 转发到 backend
 
 ## 外部反向代理建议
+
+如果你需要改内部前后端代理目标，可以在 `.env` 里覆盖 `REMOTE_API_URL`，默认值是 `http://backend:8080`。
 
 如果你使用外部 `nginx`，推荐的转发规则是：
 

@@ -16,6 +16,8 @@ services:
       - postgres
     ports:
       - "${BACKEND_PORT:-8080}:8080"
+    volumes:
+      - ./data/uploads:/app/data/uploads
     environment:
       PORT: 8080
       DATABASE_URL: postgres://${POSTGRES_USER:-multica}:${POSTGRES_PASSWORD:-multica}@postgres:5432/${POSTGRES_DB:-multica}?sslmode=disable
@@ -29,4 +31,6 @@ services:
       - backend
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      REMOTE_API_URL: ${REMOTE_API_URL:-http://backend:8080}
 

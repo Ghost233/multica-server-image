@@ -49,7 +49,7 @@ fi
 
 mkdir -p "$INSTALL_DIR"
 cd "$INSTALL_DIR"
-mkdir -p data/postgres
+mkdir -p data/postgres data/uploads
 
 for f in docker-compose.yml .env .env.example start.sh stop.sh restart.sh status.sh; do
   if [ "$FORCE" != "1" ] && [ -e "$f" ]; then
@@ -75,6 +75,7 @@ postgres_user="${POSTGRES_USER:-multica}"
 postgres_password="${POSTGRES_PASSWORD:-multica}"
 backend_port="${BACKEND_PORT:-8080}"
 frontend_port="${FRONTEND_PORT:-3000}"
+remote_api_url="${REMOTE_API_URL:-http://backend:8080}"
 
 cat > .env <<ENVEOF
 MULTICA_TAG=${multica_tag}
@@ -84,6 +85,7 @@ POSTGRES_PASSWORD=${postgres_password}
 JWT_SECRET=${jwt_secret}
 BACKEND_PORT=${backend_port}
 FRONTEND_PORT=${frontend_port}
+REMOTE_API_URL=${remote_api_url}
 ENVEOF
 
 echo "Starting containers"
