@@ -116,3 +116,7 @@ docker compose up -d
 - `/auth/` -> backend:8080
 - `/ws` -> backend:8080
 - 其他路径 -> frontend:3000
+
+仓库内提供了一个可直接参考的示例文件：
+
+- `nginx.conf.example`
