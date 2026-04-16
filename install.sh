@@ -51,7 +51,7 @@ mkdir -p "$INSTALL_DIR"
 cd "$INSTALL_DIR"
 mkdir -p data/postgres
 
-for f in docker-compose.yml .env .env.example; do
+for f in docker-compose.yml .env .env.example start.sh stop.sh restart.sh status.sh; do
   if [ "$FORCE" != "1" ] && [ -e "$f" ]; then
     echo "refusing to overwrite existing $PWD/$f (set FORCE=1 to override)" >&2
     exit 1
@@ -61,6 +61,11 @@ done
 echo "Downloading deployment files into $PWD"
 download_file "$RAW_BASE_URL/docker-compose.yml" docker-compose.yml
 download_file "$RAW_BASE_URL/.env.example" .env.example
+download_file "$RAW_BASE_URL/start.sh" start.sh
+download_file "$RAW_BASE_URL/stop.sh" stop.sh
+download_file "$RAW_BASE_URL/restart.sh" restart.sh
+download_file "$RAW_BASE_URL/status.sh" status.sh
+chmod +x start.sh stop.sh restart.sh status.sh
 cp .env.example .env
 
 jwt_secret="${JWT_SECRET:-$(generate_secret)}"
@@ -82,7 +87,7 @@ FRONTEND_PORT=${frontend_port}
 ENVEOF
 
 echo "Starting containers"
-docker compose up -d
+./start.sh
 
 echo
 echo "Multica containers started."

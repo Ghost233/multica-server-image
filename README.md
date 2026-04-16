@@ -78,7 +78,7 @@ curl -fsSL https://raw.githubusercontent.com/Ghost233/multica-server-image/main/
 2. 下载 `.env.example`
 3. 生成本地 `.env`
 4. 自动生成随机 `JWT_SECRET`
-5. 执行 `docker compose up -d`
+5. 调用 `./start.sh` 启动容器
 
 默认会把文件直接安装到当前执行目录。
 
@@ -130,7 +130,15 @@ cp .env.example .env
 3. 启动：
 
 ```bash
-docker compose up -d
+./start.sh
+```
+
+其他常用命令：
+
+```bash
+./status.sh
+./restart.sh
+./stop.sh
 ```
 
 默认端口：
