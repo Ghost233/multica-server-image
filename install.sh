@@ -51,7 +51,7 @@ mkdir -p "$INSTALL_DIR"
 cd "$INSTALL_DIR"
 mkdir -p data/postgres data/uploads
 
-for f in docker-compose.yml .env .env.example start.sh stop.sh restart.sh status.sh; do
+for f in docker-compose.yml .env .env.example start.sh stop.sh restart.sh status.sh update.sh; do
   if [ "$FORCE" != "1" ] && [ -e "$f" ]; then
     echo "refusing to overwrite existing $PWD/$f (set FORCE=1 to override)" >&2
     exit 1
@@ -65,7 +65,8 @@ download_file "$RAW_BASE_URL/start.sh" start.sh
 download_file "$RAW_BASE_URL/stop.sh" stop.sh
 download_file "$RAW_BASE_URL/restart.sh" restart.sh
 download_file "$RAW_BASE_URL/status.sh" status.sh
-chmod +x start.sh stop.sh restart.sh status.sh
+download_file "$RAW_BASE_URL/update.sh" update.sh
+chmod +x start.sh stop.sh restart.sh status.sh update.sh
 cp .env.example .env
 
 jwt_secret="${JWT_SECRET:-$(generate_secret)}"

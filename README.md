@@ -140,6 +140,26 @@ cp .env.example .env
 ./status.sh
 ./restart.sh
 ./stop.sh
+./update.sh
+```
+
+强制拉取最新镜像并重建容器：
+
+```bash
+./update.sh
+```
+
+如果你只想更新某个服务，例如只更新 frontend：
+
+```bash
+./update.sh frontend
+```
+
+等价的底层命令是：
+
+```bash
+docker compose --env-file .env pull frontend backend
+docker compose --env-file .env up -d --force-recreate frontend backend
 ```
 
 默认端口：
