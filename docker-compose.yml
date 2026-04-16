@@ -1,0 +1,41 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-multica}
+      POSTGRES_USER: ${POSTGRES_USER:-multica}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-multica}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  backend:
+    image: ghcr.io/ghost233/multica-server-image/backend:${MULTICA_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgres://${POSTGRES_USER:-multica}:${POSTGRES_PASSWORD:-multica}@postgres:5432/${POSTGRES_DB:-multica}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      RUN_MIGRATIONS_ON_START: "1"
+
+  frontend:
+    image: ghcr.io/ghost233/multica-server-image/frontend:${MULTICA_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  gateway:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - backend
+    ports:
+      - "${HTTP_PORT:-3000}:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+
+volumes:
+  pgdata:

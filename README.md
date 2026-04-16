@@ -1,82 +1,107 @@
 # multica-server-image
 
-Packaging repository for building and publishing a Docker image for the Multica Go server.
+用于打包 Multica 的 release 版本镜像。
 
-## What this repo does
+当前仓库只跟踪 **upstream release tag**，不再跟踪 `main` 的日常版本。
 
-- Checks out upstream source from `multica-ai/multica`
-- Builds the `server` and `migrate` binaries from `server/`
-- Publishes release and dev runtime images to GHCR
+## 仓库内容
 
-This repo does not deploy anything automatically. It only produces images.
+这个仓库会产出两个镜像：
 
-## Channels
+- 后端镜像：`ghcr.io/ghost233/multica-server-image/backend`
+- 前端镜像：`ghcr.io/ghost233/multica-server-image/frontend`
 
-There are two packaging channels:
+两者都只按 upstream release tag 构建，例如：
 
-- `release`: for upstream version tags such as `v0.2.0`
-- `dev`: for the latest upstream `main` commit
+- `ghcr.io/ghost233/multica-server-image/backend:v0.2.0`
+- `ghcr.io/ghost233/multica-server-image/frontend:v0.2.0`
 
-Release images are published with tags like:
+同时也会更新：
 
-- `ghcr.io/ghost233/multica-server-image:v0.2.0`
-- `ghcr.io/ghost233/multica-server-image:sha-<short-sha>`
-- optional `ghcr.io/ghost233/multica-server-image:latest`
+- `ghcr.io/ghost233/multica-server-image/backend:latest`
+- `ghcr.io/ghost233/multica-server-image/frontend:latest`
 
-Dev images are published with tags like:
+## 构建方式
 
-- `ghcr.io/ghost233/multica-server-image:dev`
-- `ghcr.io/ghost233/multica-server-image:dev-<short-sha>`
+### 手动构建
 
-This keeps upstream `main` packaging on the dev line and out of the normal release tags.
-
-## Manual build
-
-Run the `Build and Publish Image` workflow manually and provide an upstream ref such as:
+使用 `Build Release Images` workflow，输入 upstream release tag，例如：
 
 - `v0.2.0`
-- `main`
-- a commit SHA
 
-The workflow accepts a `channel` input:
+### 自动同步
 
-- `auto`: version tags go to `release`; branches and SHAs go to `dev`
-- `release`: force release tagging
-- `dev`: force dev tagging
+`Sync Upstream Release Images` workflow 每天 `UTC 00:00` 检查上游最新 release tag。
 
-`push_latest=true` only matters for release builds.
+如果发现：
 
-## Scheduled sync
+- 仓库记录的 release tag 发生变化，或
+- backend/frontend 对应镜像不存在
 
-The `Sync Upstream Images` workflow runs daily and can also be triggered manually.
+就会自动重新构建并推送镜像。
 
-Each run does two checks:
+当前同步状态记录在：
 
-1. Looks up the latest upstream release tag and builds it only if that release tag is not already present in GHCR.
-2. Looks up the current upstream `main` commit and builds it only if the matching `dev-<short-sha>` image is not already present in GHCR.
+- `.state/release-tag`
 
-This means:
+## 前端镜像说明
 
-- new upstream releases are automatically packaged into the release channel
-- upstream `main` is automatically packaged into the dev channel
-- existing release/dev images are not rebuilt unnecessarily
+前端镜像会在构建时把 `apps/web` 调整为更适合自托管的形态：
 
-## Runtime behavior
+- 启用 Next.js standalone 输出
+- 默认使用同源 API
+- 默认按当前站点域名推导 WebSocket 地址 `/ws`
 
-The image starts the Multica server by default.
+这意味着前端镜像更适合和反向代理一起部署，由反向代理把：
 
-Optional environment variable:
+- `/api/*`
+- `/auth/*`
+- `/ws`
 
-- `RUN_MIGRATIONS_ON_START=1`
+转发到 Go 后端。
 
-When enabled, the container runs `./migrate up` before starting `./server`.
+## 本地一键部署
 
-## Example local usage
+仓库根目录提供：
 
-See [docker-compose.example.yml](docker-compose.example.yml).
+- `docker-compose.yml`
+- `Caddyfile`
+- `.env.example`
 
-You still need to provide real values for:
+使用步骤：
 
-- `DATABASE_URL`
+1. 复制环境文件：
+
+```bash
+cp .env.example .env
+```
+
+2. 至少修改：
+
 - `JWT_SECRET`
-- any optional storage or auth environment variables required by your deployment
+- `MULTICA_TAG`（可选，默认 `latest`）
+
+3. 启动：
+
+```bash
+docker compose up -d
+```
+
+默认访问地址：
+
+- `http://localhost:3000`
+
+## 本地 compose 结构
+
+`docker-compose.yml` 会启动：
+
+- `postgres`
+- `backend`
+- `frontend`
+- `gateway`（Caddy）
+
+其中：
+
+- 浏览器只访问 `gateway`
+- `gateway` 把 `/api`、`/auth`、`/ws` 转发到后端
+- 其余页面请求转发到前端

@@ -1,20 +1,34 @@
-name: Sync Upstream Images
+name: Sync Upstream Release Images
 
 on:
   schedule:
     - cron: '0 0 * * *'
   workflow_dispatch:
+    inputs:
+      force:
+        description: Force rebuild the latest upstream release tag
+        required: true
+        type: boolean
+        default: false
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 env:
-  IMAGE_NAME: ghcr.io/ghost233/multica-server-image
+  BACKEND_IMAGE: ghcr.io/ghost233/multica-server-image/backend
+  FRONTEND_IMAGE: ghcr.io/ghost233/multica-server-image/frontend
 
 jobs:
-  release:
+  prepare:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      safe_tag: ${{ steps.meta.outputs.safe_tag }}
+      commit: ${{ steps.meta.outputs.commit }}
+      need_build: ${{ steps.meta.outputs.need_build }}
+      backend_tags: ${{ steps.meta.outputs.backend_tags }}
+      frontend_tags: ${{ steps.meta.outputs.frontend_tags }}
     steps:
       - name: Checkout packaging repo
         uses: actions/checkout@v4
@@ -28,9 +42,11 @@ jobs:
           set -euo pipefail
           tag="$(gh api repos/multica-ai/multica/releases/latest --jq '.tag_name')"
           safe_tag="$(printf '%s' "$tag" | tr '/:@' '-')"
+          commit="$(git ls-remote https://github.com/multica-ai/multica.git "refs/tags/${tag}" | awk '{print $1}')"
           {
             echo "tag=${tag}"
             echo "safe_tag=${safe_tag}"
+            echo "commit=${commit}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
@@ -40,92 +56,61 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Check whether release image already exists
-        id: release_check
+      - name: Check existing release images and state
+        id: meta
+        env:
+          FORCE: ${{ inputs.force || 'false' }}
         shell: bash
         run: |
           set -euo pipefail
-          if docker manifest inspect "${IMAGE_NAME}:${{ steps.release.outputs.safe_tag }}" >/dev/null 2>&1; then
-            echo "build=false" >> "$GITHUB_OUTPUT"
-            echo "Release image already exists for ${{ steps.release.outputs.tag }}"
-          else
-            echo "build=true" >> "$GITHUB_OUTPUT"
-            echo "Release image missing for ${{ steps.release.outputs.tag }}"
+          tag='${{ steps.release.outputs.tag }}'
+          safe_tag='${{ steps.release.outputs.safe_tag }}'
+          commit='${{ steps.release.outputs.commit }}'
+          current_state="$(cat .state/release-tag 2>/dev/null || true)"
+          backend_exists=false
+          frontend_exists=false
+          if docker manifest inspect "${BACKEND_IMAGE}:${safe_tag}" >/dev/null 2>&1; then
+            backend_exists=true
           fi
-
-      - name: Checkout upstream source
-        if: steps.release_check.outputs.build == 'true'
-        uses: actions/checkout@v4
-        with:
-          repository: multica-ai/multica
-          ref: ${{ steps.release.outputs.tag }}
-          path: upstream
-          fetch-depth: 1
-
-      - name: Derive release metadata
-        if: steps.release_check.outputs.build == 'true'
-        id: release_meta
-        shell: bash
-        run: |
-          set -euo pipefail
-          commit="$(git -C upstream rev-parse HEAD)"
-          short_sha="$(git -C upstream rev-parse --short HEAD)"
-          tags="${IMAGE_NAME}:${{ steps.release.outputs.safe_tag }}\n${IMAGE_NAME}:sha-${short_sha}\n${IMAGE_NAME}:latest"
+          if docker manifest inspect "${FRONTEND_IMAGE}:${safe_tag}" >/dev/null 2>&1; then
+            frontend_exists=true
+          fi
+          need_build=false
+          if [ "$FORCE" = 'true' ]; then
+            need_build=true
+          elif [ "$tag" != "$current_state" ] || [ "$backend_exists" != 'true' ] || [ "$frontend_exists" != 'true' ]; then
+            need_build=true
+          fi
+          backend_tags="${BACKEND_IMAGE}:${safe_tag}\n${BACKEND_IMAGE}:latest"
+          frontend_tags="${FRONTEND_IMAGE}:${safe_tag}\n${FRONTEND_IMAGE}:latest"
           {
+            echo "tag=${tag}"
+            echo "safe_tag=${safe_tag}"
             echo "commit=${commit}"
-            echo "version=${{ steps.release.outputs.tag }}"
-            echo 'tags<<EOF'
-            printf '%b\n' "$tags"
+            echo "need_build=${need_build}"
+            echo 'backend_tags<<EOF'
+            printf '%b\n' "$backend_tags"
+            echo 'EOF'
+            echo 'frontend_tags<<EOF'
+            printf '%b\n' "$frontend_tags"
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
-      - name: Build and publish release image
-        if: steps.release_check.outputs.build == 'true'
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: ${{ steps.release_meta.outputs.tags }}
-          build-args: |
-            VERSION=${{ steps.release_meta.outputs.version }}
-            COMMIT=${{ steps.release_meta.outputs.commit }}
-          labels: |
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.revision=${{ steps.release_meta.outputs.commit }}
-            org.opencontainers.image.version=${{ steps.release_meta.outputs.version }}
-            org.opencontainers.image.description=Packaging image for Multica server
-            org.opencontainers.image.vendor=Ghost233
-
-  dev:
+  backend:
     runs-on: ubuntu-latest
+    needs: prepare
+    if: needs.prepare.outputs.need_build == 'true'
     steps:
       - name: Checkout packaging repo
         uses: actions/checkout@v4
 
-      - name: Checkout upstream main
+      - name: Checkout upstream source
         uses: actions/checkout@v4
         with:
           repository: multica-ai/multica
-          ref: main
+          ref: ${{ needs.prepare.outputs.tag }}
           path: upstream
           fetch-depth: 1
-
-      - name: Derive dev metadata
-        id: dev_meta
-        shell: bash
-        run: |
-          set -euo pipefail
-          commit="$(git -C upstream rev-parse HEAD)"
-          short_sha="$(git -C upstream rev-parse --short HEAD)"
-          {
-            echo "commit=${commit}"
-            echo "short_sha=${short_sha}"
-            echo "version=main"
-            echo 'tags<<EOF'
-            printf '%b\n' "${IMAGE_NAME}:dev\n${IMAGE_NAME}:dev-${short_sha}"
-            echo 'EOF'
-          } >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -134,33 +119,84 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Check whether dev image already exists
-        id: dev_check
-        shell: bash
-        run: |
-          set -euo pipefail
-          if docker manifest inspect "${IMAGE_NAME}:dev-${{ steps.dev_meta.outputs.short_sha }}" >/dev/null 2>&1; then
-            echo "build=false" >> "$GITHUB_OUTPUT"
-            echo "Dev image already exists for main@${{ steps.dev_meta.outputs.short_sha }}"
-          else
-            echo "build=true" >> "$GITHUB_OUTPUT"
-            echo "Dev image missing for main@${{ steps.dev_meta.outputs.short_sha }}"
-          fi
-
-      - name: Build and publish dev image
-        if: steps.dev_check.outputs.build == 'true'
+      - name: Build and publish backend image
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./Dockerfile
+          file: ./Dockerfile.backend
           push: true
-          tags: ${{ steps.dev_meta.outputs.tags }}
+          tags: ${{ needs.prepare.outputs.backend_tags }}
           build-args: |
-            VERSION=${{ steps.dev_meta.outputs.version }}
-            COMMIT=${{ steps.dev_meta.outputs.commit }}
+            VERSION=${{ needs.prepare.outputs.tag }}
+            COMMIT=${{ needs.prepare.outputs.commit }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.revision=${{ steps.dev_meta.outputs.commit }}
-            org.opencontainers.image.version=dev
-            org.opencontainers.image.description=Dev packaging image for Multica server main branch
+            org.opencontainers.image.revision=${{ needs.prepare.outputs.commit }}
+            org.opencontainers.image.version=${{ needs.prepare.outputs.tag }}
+            org.opencontainers.image.description=Multica backend release image
             org.opencontainers.image.vendor=Ghost233
+
+  frontend:
+    runs-on: ubuntu-latest
+    needs: prepare
+    if: needs.prepare.outputs.need_build == 'true'
+    steps:
+      - name: Checkout packaging repo
+        uses: actions/checkout@v4
+
+      - name: Checkout upstream source
+        uses: actions/checkout@v4
+        with:
+          repository: multica-ai/multica
+          ref: ${{ needs.prepare.outputs.tag }}
+          path: upstream
+          fetch-depth: 1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.frontend
+          push: true
+          tags: ${{ needs.prepare.outputs.frontend_tags }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=
+            NEXT_PUBLIC_WS_URL=
+            NEXT_PUBLIC_GOOGLE_CLIENT_ID=
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ needs.prepare.outputs.commit }}
+            org.opencontainers.image.version=${{ needs.prepare.outputs.tag }}
+            org.opencontainers.image.description=Multica frontend release image
+            org.opencontainers.image.vendor=Ghost233
+
+  update-state:
+    runs-on: ubuntu-latest
+    needs: [prepare, backend, frontend]
+    if: needs.prepare.outputs.need_build == 'true' && needs.backend.result == 'success' && needs.frontend.result == 'success'
+    steps:
+      - name: Checkout packaging repo
+        uses: actions/checkout@v4
+
+      - name: Update release state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .state
+          printf '%s\n' '${{ needs.prepare.outputs.tag }}' > .state/release-tag
+          if git diff --quiet -- .state; then
+            echo "No release state change"
+            exit 0
+          fi
+          git config user.name Ghost233
+          git config user.email 888208+Ghost233@users.noreply.github.com
+          git add .state
+          git commit -m "chore(state): update packaged release tag"
+          git push

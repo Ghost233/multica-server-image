@@ -1,0 +1,12 @@
+:80 {
+  encode gzip
+
+  @backend path /api/* /auth/* /ws /ws/*
+  handle @backend {
+    reverse_proxy backend:8080
+  }
+
+  handle {
+    reverse_proxy frontend:3000
+  }
+}
