@@ -70,6 +70,8 @@
 curl -fsSL https://raw.githubusercontent.com/Ghost233/multica-server-image/main/install.sh | sh
 ```
 
+注意：如果你要通过环境变量覆盖安装参数，变量必须传给 `sh`，不能只传给前面的 `curl`。
+
 脚本会自动：
 
 1. 下载 `docker-compose.yml`
@@ -83,8 +85,16 @@ curl -fsSL https://raw.githubusercontent.com/Ghost233/multica-server-image/main/
 你也可以在执行前通过环境变量覆盖默认行为，例如：
 
 ```bash
-INSTALL_DIR=/opt/multica MULTICA_TAG=v0.2.0 FRONTEND_PORT=80 BACKEND_PORT=8080 \
-  curl -fsSL https://raw.githubusercontent.com/Ghost233/multica-server-image/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Ghost233/multica-server-image/main/install.sh | \
+  INSTALL_DIR=/opt/multica MULTICA_TAG=v0.2.0 FRONTEND_PORT=80 BACKEND_PORT=8080 sh
+```
+
+或者先下载脚本再执行：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ghost233/multica-server-image/main/install.sh -o install.sh
+chmod +x install.sh
+INSTALL_DIR=/opt/multica MULTICA_TAG=v0.2.0 FRONTEND_PORT=80 BACKEND_PORT=8080 ./install.sh
 ```
 
 可用环境变量：
