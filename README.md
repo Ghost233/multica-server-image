@@ -62,6 +62,43 @@
 
 ## 本地一键部署
 
+## 一键安装脚本
+
+如果你想像常见自托管应用一样直接执行：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ghost233/multica-server-image/main/install.sh | sh
+```
+
+脚本会自动：
+
+1. 下载 `docker-compose.yml`
+2. 下载 `.env.example`
+3. 生成本地 `.env`
+4. 自动生成随机 `JWT_SECRET`
+5. 执行 `docker compose up -d`
+
+默认会把文件安装到当前目录下的 `./multica`。
+
+你也可以在执行前通过环境变量覆盖默认行为，例如：
+
+```bash
+INSTALL_DIR=/opt/multica MULTICA_TAG=v0.2.0 FRONTEND_PORT=80 BACKEND_PORT=8080 \
+  curl -fsSL https://raw.githubusercontent.com/Ghost233/multica-server-image/main/install.sh | sh
+```
+
+可用环境变量：
+
+- `INSTALL_DIR`
+- `FORCE=1`（允许覆盖已有文件）
+- `MULTICA_TAG`
+- `POSTGRES_DB`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+- `JWT_SECRET`
+- `BACKEND_PORT`
+- `FRONTEND_PORT`
+
 仓库根目录提供：
 
 - `docker-compose.yml`
