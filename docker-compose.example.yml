@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: multica
+      POSTGRES_USER: multica
+      POSTGRES_PASSWORD: change-me
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  multica-server:
+    image: ghcr.io/ghost233/multica-server-image:v0.2.0
+    depends_on:
+      - postgres
+    environment:
+      PORT: "8080"
+      DATABASE_URL: postgres://multica:change-me@postgres:5432/multica?sslmode=disable
+      JWT_SECRET: change-me
+      RUN_MIGRATIONS_ON_START: "1"
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  pgdata:

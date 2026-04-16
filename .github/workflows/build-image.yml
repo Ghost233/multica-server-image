@@ -1,0 +1,82 @@
+name: Build and Publish Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: Upstream multica ref to package (tag, branch, or commit)
+        required: true
+        default: v0.2.0
+      push_latest:
+        description: Also publish the latest tag
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_NAME: ghcr.io/ghost233/multica-server-image
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout packaging repo
+        uses: actions/checkout@v4
+
+      - name: Checkout upstream source
+        uses: actions/checkout@v4
+        with:
+          repository: multica-ai/multica
+          ref: ${{ inputs.upstream_ref }}
+          path: upstream
+          fetch-depth: 1
+
+      - name: Derive image metadata
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          raw_ref='${{ inputs.upstream_ref }}'
+          raw_ref="${raw_ref#refs/tags/}"
+          raw_ref="${raw_ref#refs/heads/}"
+          safe_ref="$(printf '%s' "$raw_ref" | tr '/:@' '-')"
+          commit="$(git -C upstream rev-parse HEAD)"
+          short_sha="$(git -C upstream rev-parse --short HEAD)"
+          tags="${IMAGE_NAME}:${safe_ref}\n${IMAGE_NAME}:sha-${short_sha}"
+          if [ '${{ inputs.push_latest }}' = 'true' ]; then
+            tags="${tags}\n${IMAGE_NAME}:latest"
+          fi
+          {
+            echo "commit=${commit}"
+            echo "version=${raw_ref}"
+            echo 'tags<<EOF'
+            printf '%b\n' "$tags"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            COMMIT=${{ steps.meta.outputs.commit }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ steps.meta.outputs.commit }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+            org.opencontainers.image.description=Packaging image for Multica server
